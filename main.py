@@ -322,7 +322,7 @@ def visualize_seating(seating):
                      rotation_mode='anchor')
 
     plt.tight_layout(pad=3.0, w_pad=4.0, h_pad=4.0)
-    plt.show()
+    return plt.gcf()
 
 
 def explore_arrangements(people, constraints, table_size, num_tables, max_attempts=100):
