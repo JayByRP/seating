@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wedding Seating Planner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        .table-viz {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px;
+        }
+
+        .guest-badge {
+            margin: 3px;
+            padding: 8px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+
+        .constraint-badge {
+            margin: 2px;
+        }
+
+        .config-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .invalid-constraint {
+            border: 1px solid #dc3545 !important;
+        }
+    </style>
+</head>
+<body>
+<div class="container py-5">
+    <h1 class="mb-4">🎉 Wedding Seating Planner</h1>
+
+    <div class="row mb-4">
+        <div class="col">
+            <button class="btn btn-outline-secondary" onclick="generateTestData()" data-bs-toggle="tooltip"
+                    title="Generate sample data">
+                Test Data
+            </button>
+            <button class="btn btn-outline-secondary" onclick="exportData()" data-bs-toggle="tooltip"
+                    title="Export guests and constraints">
+                Export
+            </button>
+            <button class="btn btn-outline-secondary" onclick="document.getElementById('importFile').click()"
+                    data-bs-toggle="tooltip" title="Import JSON file">
+                Import
+                <input type="file" id="importFile" hidden accept=".json" onchange="importData(this)">
+            </button>
+            <button class="btn btn-outline-danger" onclick="clearConstraints()">
+                Clear Constraints
+            </button>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Guest List</h5>
+            <div class="input-group mb-3">
+                <textarea class="form-control" id="guestList" rows="3"
+                          placeholder="Enter guest names separated by commas" onkeyup="updateGuestSelects()"></textarea>
+            </div>
+
+            <h5 class="mt-4">Constraints</h5>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <select class="form-select" id="guest1"></select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="relation">
+                        <option value="must">must sit with</option>
+                        <option value="must_not">must not sit with</option>
+                        <option value="prefer">prefers to sit with</option>
+                        <option value="prefer_apart">prefers to sit apart from</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select" id="guest2"></select>
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-primary w-100" onclick="addConstraint()">Add</button>
+                </div>
+            </div>
+            <div id="constraintsList" class="mb-3"></div>
+
+            <h5 class="mt-4">Table Configuration</h5>
+            <div class="config-section">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tableMode" id="autoMode" value="auto" checked
+                           onchange="toggleConfigMode()">
+                    <label class="form-check-label" for="autoMode">Auto Table Sizes</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tableMode" id="manualMode" value="manual"
+                           onchange="toggleConfigMode()">
+                    <label class="form-check-label" for="manualMode">Fixed Table Size</label>
+                </div>
+
+                <div id="autoConfig" class="mt-3">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Min Size</label>
+                            <input type="number" class="form-control" id="minSize" value="5" min="3">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Max Size</label>
+                            <input type="number" class="form-control" id="maxSize" value="10" min="5">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="manualConfig" class="mt-3">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Table Size</label>
+                            <input type="number" class="form-control" id="fixedSize" value="8" min="3">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-success mt-4 w-100" onclick="generateArrangements()">
+                Generate Seating Plan
+            </button>
+        </div>
+    </div>
+
+    <div id="results" class="d-none">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Seating Arrangements</h5>
+
+                <!-- Text View Always Visible -->
+                <div id="textView" class="mb-4">
+                    <div id="arrangementViz"></div>
+                </div>
+
+                <!-- Image View Always Visible -->
+                <div id="imageView">
+                    <img id="visualizationImg" class="img-fluid">
+                </div>
+
+                <!-- Navigation and Download -->
+                <div class="mt-3 d-flex justify-content-between align-items-center">
+                    <button class="btn btn-primary" onclick="previousArrangement()" id="prevBtn">← Previous</button>
+                    <div>
+                        <span id="arrangementCount" class="mx-3"></span>
+                        <button class="btn btn-success" onclick="downloadCombined()">
+                            Download
+                        </button>
+                    </div>
+                    <button class="btn btn-primary" onclick="nextArrangement()" id="nextBtn">Next →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let guests = JSON.parse(localStorage.getItem('guests') || '[]');
+    let constraints = JSON.parse(localStorage.getItem('constraints') || '[]');
+
+    function updateGuestSelects() {
+        guests = [...new Set($('#guestList').val().split(',').map(g => g.trim()).filter(g => g))].sort();
+        $('#guest1, #guest2').html(guests.map(g => `<option>${g}</option>`));
+        localStorage.setItem('guests', JSON.stringify(guests));
+    }
+
+    $('#guestList').css('min-height', '80px').on('input', function () {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+        updateGuestSelects();
+    });
+
+    function addConstraint() {
+        const a = $('#guest1').val();
+        const b = $('#guest2').val();
+        const type = $('#relation').val();
+
+        if (!a || !b || a === b) {
+            alert("Please select two different guests");
+            return;
+        }
+
+        const exists = constraints.some(c =>
+            (c.a === a && c.b === b && c.type === type) ||
+            (c.a === b && c.b === a && c.type === type)
+        );
+
+        if (exists) {
+            alert("Constraint already exists");
+            return;
+        }
+
+        constraints.push({a, b, type});
+        updateConstraintsList();
+        saveData();
+    }
+
+    function updateConstraintsList() {
+        const validGuests = new Set(guests);
+        $('#constraintsList').html(
+            constraints.map((c, idx) => {
+                const isValid = validGuests.has(c.a) && validGuests.has(c.b);
+                return `
+                    <div class="mb-2 ${isValid ? '' : 'text-danger'}">
+                        <span class="badge bg-secondary ${isValid ? '' : 'invalid-constraint'}">
+                            ${c.a} ${c.type.replace(/_/g, ' ')} ${c.b}
+                            <button class="btn-close btn-close-white ms-2" onclick="removeConstraint(${idx})"></button>
+                        </span>
+                        ${!isValid ? '<i class="bi bi-exclamation-circle"></i> Guest(s) not found on the guest list' : ''}
+                    </div>
+                `;
+            })
+        );
+    }
+
+    $('#guestList').on('input', function () {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+        updateGuestSelects();
+        updateConstraintsList();
+    });
+
+    function removeConstraint(index) {
+        constraints.splice(index, 1);
+        updateConstraintsList();
+        saveData();
+    }
+
+    function clearConstraints() {
+        if (confirm("Clear all constraints?")) {
+            constraints = [];
+            updateConstraintsList();
+            saveData();
+        }
+    }
+
+    function toggleConfigMode() {
+        const mode = $('input[name="tableMode"]:checked').val();
+        $('#autoConfig').toggle(mode === 'auto');
+        $('#manualConfig').toggle(mode === 'manual');
+    }
+
+    function generateArrangements() {
+        const payload = {
+            guests: guests,
+            constraints: constraints,
+            config: {
+                mode: $('input[name="tableMode"]:checked').val(),
+                min_size: parseInt($('#minSize').val()),
+                max_size: parseInt($('#maxSize').val()),
+                fixed_size: parseInt($('#fixedSize').val())
+            }
+        };
+
+        $.ajax({
+            url: '/generate',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function (response) {
+                $('#results').removeClass('d-none');
+                displayArrangement(response.tables, response.current, response.total);
+                sessionStorage.setItem('currentArrangement', JSON.stringify(response.tables));
+            },
+            error: function (err) {
+                alert(err.responseJSON?.error || 'Error generating arrangement');
+            }
+        });
+    }
+
+    function downloadCombined() {
+        window.location.href = '/download-both';
+    }
+
+    function displayArrangement(tables, current, total) {
+        $('#arrangementViz').html(
+            tables.map((table, i) => `
+                <div class="table-viz">
+                    <h6>Table ${i + 1} (${table.length} guests)</h6>
+                    <div>${table.sort().join(', ')}</div>
+                </div>
+            `).join('')
+        );
+
+        const timestamp = new Date().getTime();
+        $('#visualizationImg').attr('src', `/download-image?t=${timestamp}`);
+
+        $('#arrangementCount').text(`Arrangement ${current + 1} of ${total}`);
+        $('#prevBtn').prop('disabled', current === 0);
+        $('#nextBtn').prop('disabled', current === total - 1);
+    }
+
+    function saveData() {
+        localStorage.setItem('guests', JSON.stringify(guests));
+        localStorage.setItem('constraints', JSON.stringify(constraints));
+        $('#guestList').val(guests.join(', '));
+    }
+
+    function exportData() {
+        const data = {
+            guests: guests,
+            constraints: constraints
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'seating_data.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }
+
+    function importData(input) {
+        const file = input.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                guests = [...new Set(data.guests)].sort();
+                constraints = data.constraints.filter(c =>
+                    guests.includes(c.a) &&
+                    guests.includes(c.b) &&
+                    c.a !== c.b
+                );
+                $('#guestList').val(guests.join(', '));
+                updateGuestSelects();
+                updateConstraintsList();
+                saveData();
+            } catch (error) {
+                alert('Invalid file format');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function generateTestData() {
+        $.get('/test-data', function (response) {
+            guests = response.guests;
+            constraints = response.constraints;
+            $('#guestList').val(guests.join(', '));
+            updateGuestSelects();
+            updateConstraintsList();
+            saveData();
+        });
+    }
+
+    function nextArrangement() {
+        $.ajax({
+            url: '/next',
+            type: 'GET',
+            success: function (response) {
+                displayArrangement(response.tables, response.current, response.total);
+                sessionStorage.setItem('currentArrangement', JSON.stringify(response.tables));
+                if ($('#imageView').is(':visible')) {
+                    const timestamp = new Date().getTime();
+                    $('#visualizationImg').attr('src', `/download-image?t=${timestamp}`);
+                }
+            },
+            error: function (err) {
+                alert("Error retrieving next arrangement");
+            }
+        });
+    }
+
+    function previousArrangement() {
+        $.ajax({
+            url: '/previous',
+            type: 'GET',
+            success: function (response) {
+                displayArrangement(response.tables, response.current, response.total);
+                sessionStorage.setItem('currentArrangement', JSON.stringify(response.tables));
+                if ($('#imageView').is(':visible')) {
+                    const timestamp = new Date().getTime();
+                    $('#visualizationImg').attr('src', `/download-image?t=${timestamp}`);
+                }
+            },
+            error: function (err) {
+                alert("Error retrieving previous arrangement");
+            }
+        });
+    }
+
+    $(document).ready(function () {
+        guests = JSON.parse(localStorage.getItem('guests') || '[]');
+        $('#guestList').val(guests.join(', '));
+        updateGuestSelects();
+
+        constraints = JSON.parse(localStorage.getItem('constraints') || '[]');
+        updateConstraintsList();
+
+        $('[data-bs-toggle="tooltip"]').tooltip();
+        toggleConfigMode();
+    });
+</script>
+</body>
+</html>

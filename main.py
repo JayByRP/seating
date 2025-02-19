@@ -4,6 +4,9 @@ from collections import defaultdict
 from itertools import combinations
 import names
 import numpy as np
+import matplotlib
+
+matplotlib.use('Agg')
 
 
 class SeatingGenerator:
@@ -115,37 +118,83 @@ class SeatingGenerator:
         if n < 2:
             return guests.copy()
 
-        def is_valid(arrangement):
-            for i in range(n):
-                a, b = arrangement[i], arrangement[(i + 1) % n]
-                if self.constraints[frozenset({a, b})]['prefer_apart']:
-                    return False
-            return True
+        must_pairs = defaultdict(set)
+        prefer_pairs = defaultdict(set)
+        avoid_pairs = defaultdict(set)
 
-        valid_arr = guests.copy()
-        for _ in range(1000):
-            shuffled = random.sample(guests, n)
-            if is_valid(shuffled):
-                valid_arr = shuffled
+        for a, b in combinations(guests, 2):
+            pair = frozenset({a, b})
+            constr = self.constraints.get(pair, {})
+            if constr.get('must'):
+                must_pairs[a].add(b)
+                must_pairs[b].add(a)
+            if constr.get('prefer'):
+                prefer_pairs[a].add(b)
+                prefer_pairs[b].add(a)
+            if constr.get('prefer_apart') or constr.get('must_not'):
+                avoid_pairs[a].add(b)
+                avoid_pairs[b].add(a)
+
+        arranged = []
+        unplaced = set(guests)
+
+        while unplaced:
+            found = False
+            for guest in list(unplaced):
+                if must_pairs[guest]:
+                    partner = must_pairs[guest].pop()
+                    if partner in unplaced:
+                        arranged.extend([guest, partner])
+                        unplaced.remove(guest)
+                        unplaced.remove(partner)
+                        found = True
+                        break
+            if not found:
                 break
 
-        best_arr, best_score = valid_arr, sum(
-            self.constraints[frozenset({valid_arr[i], valid_arr[(i + 1) % n]})]['prefer']
-            for i in range(n)
-        )
+        while unplaced:
+            best_score = -1
+            best_pos = -1
+            best_guest = None
 
-        for _ in range(1000):
-            i, j = random.sample(range(n), 2)
-            new_arr = best_arr.copy()
-            new_arr[i], new_arr[j] = new_arr[j], new_arr[i]
-            if is_valid(new_arr):
-                new_score = sum(
-                    self.constraints[frozenset({new_arr[k], new_arr[(k + 1) % n]})]['prefer']
-                    for k in range(n)
-                )
-                if new_score > best_score:
-                    best_arr, best_score = new_arr, new_score
-        return best_arr
+            for guest in unplaced:
+                for pos in range(len(arranged) + 1):
+                    left = arranged[pos - 1] if pos > 0 else None
+                    right = arranged[pos] if pos < len(arranged) else None
+
+                    score = 0
+                    if left and left in prefer_pairs[guest]:
+                        score += 2
+                    if right and right in prefer_pairs[guest]:
+                        score += 2
+                    if left and left in avoid_pairs[guest]:
+                        score -= 3
+                    if right and right in avoid_pairs[guest]:
+                        score -= 3
+
+                    if score > best_score:
+                        best_score = score
+                        best_pos = pos
+                        best_guest = guest
+
+            if best_guest:
+                arranged.insert(best_pos, best_guest)
+                unplaced.remove(best_guest)
+            else:
+                arranged.append(unplaced.pop())
+
+        for i in range(n):
+            a, b = arranged[i], arranged[(i + 1) % n]
+            if b in avoid_pairs[a]:
+                for j in range(n):
+                    if j == i or j == (i + 1) % n:
+                        continue
+                    c = arranged[j]
+                    if c not in avoid_pairs[a] and c not in avoid_pairs[b]:
+                        arranged[i], arranged[j] = arranged[j], arranged[i]
+                        break
+
+        return arranged
 
     def generate_seating(self):
         try:
@@ -289,7 +338,7 @@ def visualize_seating(seating):
     rows = int(np.ceil(num_tables / cols))
 
     fig_width = max(12, cols * 6)
-    fig_height = max(8, rows * 4)
+    fig_height = max(8, rows * 5)
     plt.figure(figsize=(fig_width, fig_height))
 
     for i, table in enumerate(seating, 1):
@@ -301,8 +350,10 @@ def visualize_seating(seating):
         table_circle = plt.Circle((0, 0), 1.0, color=colors[i % len(colors)], alpha=0.3)
         ax.add_artist(table_circle)
 
-        plt.text(0, 0, f'Table {i}\n({len(table)} people)',
-                 ha='center', va='center', fontsize=12, weight='bold')
+        plt.text(0, 0, f"Table {i}",
+                 ha='center', va='center',
+                 fontsize=16, weight='bold',
+                 color='#333333')
 
         n = len(table)
         angle_step = 2 * np.pi / n
@@ -311,13 +362,21 @@ def visualize_seating(seating):
             x = np.cos(angle) * 1.2
             y = np.sin(angle) * 1.2
 
-            font_size = 10 if len(table) < 8 else 8
-            if any(len(n) > 12 for n in table):
-                font_size = max(6, font_size - 2)
+            max_name_len = max(len(n) for n in table)
+            if max_name_len > 15:
+                font_size = 10
+            elif max_name_len > 10:
+                font_size = 12
+            else:
+                font_size = 14 if n < 8 else 12
+
+            rotation_angle = angle * 180 / np.pi
+            if 90 < rotation_angle < 270:
+                rotation_angle += 180
 
             plt.text(x, y, name,
                      ha='center', va='center',
-                     rotation=angle * 180 / np.pi if abs(angle * 180 / np.pi) < 90 else angle * 180 / np.pi + 180,
+                     rotation=rotation_angle,
                      fontsize=font_size,
                      rotation_mode='anchor')
 
@@ -360,7 +419,7 @@ def get_real_data():
         if guest_input:
             guests = [name.strip() for name in guest_input.split(',')]
             guests = [' '.join([part.capitalize() for part in name.split()]) for name in guests]
-            guests = list(dict.fromkeys(guests))  # Remove duplicates while preserving order
+            guests = list(dict.fromkeys(guests))
             if len(guests) < 2:
                 print("Please enter at least 2 guests")
                 continue
